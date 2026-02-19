@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+import http from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import * as z from "zod/v4";
 import { buildMindMapPrompt } from "./prompt.js";
 
@@ -29,9 +30,29 @@ server.registerTool(
   }
 );
 
-async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-}
+const PORT = Number(process.env.PORT) || 3000;
 
-main().catch(console.error);
+const httpServer = http.createServer(async (req, res) => {
+  if (req.url === "/mcp") {
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+    });
+    await server.connect(transport);
+    await transport.handleRequest(req, res);
+    return;
+  }
+
+  if (req.url === "/health" || req.url === "/") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ status: "ok", name: "mcp-chat-visualizer" }));
+    return;
+  }
+
+  res.writeHead(404);
+  res.end("Not Found");
+});
+
+httpServer.listen(PORT, () => {
+  console.log(`mcp-chat-visualizer running on port ${PORT}`);
+  console.log(`MCP endpoint: http://localhost:${PORT}/mcp`);
+});
