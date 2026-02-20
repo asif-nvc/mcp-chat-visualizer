@@ -16,7 +16,7 @@ function createServer(): McpServer {
     {
       title: "Visualize Chat",
       description:
-        "Visualize a conversation as a hierarchical mind map. Pass the conversation text and receive structured instructions. Follow the returned instructions to generate the mind map JSON.",
+        "Visualize a conversation as a structured JSON mind map. Pass the conversation text. The tool returns exact instructions you MUST follow to produce raw JSON output. IMPORTANT: Output ONLY valid raw JSON — never output Mermaid, Markdown, or any other format.",
       inputSchema: z.object({
         conversation: z
           .string()

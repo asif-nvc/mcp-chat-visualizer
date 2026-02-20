@@ -9,11 +9,13 @@ You may go up to 3-4 levels deep where appropriate.
 **Conversation to visualize:**
 ${conversation}
 
-**JSON Generation Rules (Strict):**
-1. Output ONLY valid, raw JSON.
-2. Do NOT use Markdown code blocks (no \`\`\`json).
-3. Do NOT include any text before or after the JSON.
-4. Ensure the JSON is parsable by standard libraries.
+**CRITICAL OUTPUT RULES:**
+1. Output ONLY valid, raw JSON. Nothing else.
+2. Do NOT use Markdown code blocks (no \`\`\`json, no \`\`\`).
+3. Do NOT output Mermaid syntax, diagrams, or any non-JSON format.
+4. Do NOT include any text, explanation, or commentary before or after the JSON.
+5. The response must be parsable by JSON.parse() directly.
+6. Start your response with { and end with }.
 
 **Mind Map logic:**
 1. **Root:** The central topic of the conversation.
@@ -51,5 +53,7 @@ Use this EXACT JSON structure.
 - hierarchy keys must match edge sources, hierarchy values must match edge targets.
 - nodeCount in metadata must equal the total number of nodes.
 - All IDs must be unique.
-- Output raw JSON only, no extra text.`;
+- Output raw JSON only, no extra text.
+- NEVER use Mermaid, Markdown, or any diagram syntax. JSON ONLY.
+- Your entire response must be a single valid JSON object.`;
 }
