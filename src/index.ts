@@ -5,6 +5,9 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import * as z from "zod/v4";
 import { buildMindMapPrompt } from "./prompt.js";
 
+const API_BASE_URL =
+  process.env.API_BASE_URL || "https://api.navigatechat.com";
+
 function createServer(): McpServer {
   const server = new McpServer({
     name: "chat-visualizer",
@@ -29,6 +32,118 @@ function createServer(): McpServer {
       const prompt = buildMindMapPrompt(conversation);
       return {
         content: [{ type: "text" as const, text: prompt }],
+      };
+    }
+  );
+
+  server.registerTool(
+    "create_public_diagram",
+    {
+      title: "Create Public Diagram",
+      description:
+        "Create a publicly shareable diagram link. Takes diagram JSON content (a NavigateChat mindmap/graph/sequence object) and returns a public URL that anyone can view without authentication.",
+      inputSchema: z.object({
+        json_content: z
+          .union([z.string(), z.record(z.string(), z.any())])
+          .describe(
+            "The diagram JSON content — either a JSON string or an object with metadata, nodes, and edges"
+          ),
+      }),
+    },
+    async ({ json_content }) => {
+      const body =
+        typeof json_content === "string"
+          ? { json_content: JSON.parse(json_content) }
+          : { json_content };
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/chat/diagram/public`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error creating public diagram (${response.status}): ${errorText}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const data = await response.json();
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(
+              {
+                link: data.link,
+                public_id: data.public_id,
+                diagram_id: data.diagram_id,
+                created_at: data.created_at,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+  );
+
+  server.registerTool(
+    "justify_content",
+    {
+      title: "Justify Content",
+      description:
+        "Validate and refactor JSON content to match the NavigateChat diagram structure. Pass raw or malformed diagram JSON and receive a corrected version that conforms to the expected schema.",
+      inputSchema: z.object({
+        user_json: z
+          .string()
+          .describe(
+            "The JSON string to validate and refactor into NavigateChat diagram format"
+          ),
+      }),
+    },
+    async ({ user_json }) => {
+      const response = await fetch(
+        `${API_BASE_URL}/api/chat/justify_content`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_json }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error justifying content (${response.status}): ${errorText}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const data = await response.json();
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(data, null, 2),
+          },
+        ],
       };
     }
   );
