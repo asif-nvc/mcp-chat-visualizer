@@ -100,6 +100,74 @@ function createServer(): McpServer {
   );
 
   server.registerTool(
+    "update_public_diagram",
+    {
+      title: "Update Public Diagram",
+      description:
+        "Update an existing public diagram's content at the same shareable link. Use this when a user wants to modify a previously created diagram — the URL stays the same and the TTL is extended.",
+      inputSchema: z.object({
+        public_id: z
+          .string()
+          .describe(
+            "The public_id returned from a previous create_public_diagram call"
+          ),
+        json_content: z
+          .union([z.string(), z.record(z.string(), z.any())])
+          .describe(
+            "The updated diagram JSON content — either a JSON string or an object with metadata, nodes, and edges"
+          ),
+      }),
+    },
+    async ({ public_id, json_content }) => {
+      const body =
+        typeof json_content === "string"
+          ? { json_content: JSON.parse(json_content) }
+          : { json_content };
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/diagram/${public_id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error updating diagram (${response.status}): ${errorText}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const data = await response.json();
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(
+              {
+                link: data.link,
+                public_id: data.public_id,
+                diagram_id: data.diagram_id,
+                created_at: data.created_at,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+  );
+
+  server.registerTool(
     "justify_content",
     {
       title: "Justify Content",
