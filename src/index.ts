@@ -289,8 +289,23 @@ function setCors(res: http.ServerResponse) {
   }
 }
 
-// Session store: maps session IDs to their transport + server
+// Session store: maps session IDs to their transport
 const sessions = new Map<string, { transport: StreamableHTTPServerTransport }>();
+
+function createSession(): StreamableHTTPServerTransport {
+  const server = createServer();
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: () => crypto.randomUUID(),
+  });
+
+  transport.onclose = () => {
+    const sid = transport.sessionId;
+    if (sid) sessions.delete(sid);
+  };
+
+  server.connect(transport);
+  return transport;
+}
 
 const httpServer = http.createServer(async (req, res) => {
   setCors(res);
@@ -312,21 +327,19 @@ const httpServer = http.createServer(async (req, res) => {
         return;
       }
 
-      // New session — create server + transport with session support
-      const server = createServer();
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => crypto.randomUUID(),
-      });
+      // Unknown session ID — the client thinks it has a session but we don't
+      // (e.g. after a redeploy). Return 404 so the client re-initializes.
+      if (sessionId && !sessions.has(sessionId)) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Session not found. Please reinitialize." }));
+        return;
+      }
 
-      transport.onclose = () => {
-        const sid = transport.sessionId;
-        if (sid) sessions.delete(sid);
-      };
-
-      await server.connect(transport);
+      // No session ID — new connection, create session
+      const transport = createSession();
       await transport.handleRequest(req, res);
 
-      // Store the session after the init handshake assigns a session ID
+      // Store after init assigns a session ID
       const sid = transport.sessionId;
       if (sid) {
         sessions.set(sid, { transport });
