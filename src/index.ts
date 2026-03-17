@@ -25,12 +25,6 @@ function createServer(): McpServer {
     version: "1.0.0",
   });
 
-  // Log client capabilities to debug MCP Apps support
-  server.server.oninitialized = () => {
-    const clientCaps = server.server.getClientCapabilities();
-    console.log("Client capabilities:", JSON.stringify(clientCaps, null, 2));
-  };
-
   server.registerTool(
     "visualize_chat",
     {

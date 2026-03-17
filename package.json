@@ -10,8 +10,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc && node -e \"require('fs').copyFileSync('src/widget.html','dist/widget.html')\"",
-    "prepublishOnly": "tsc && node -e \"require('fs').copyFileSync('src/widget.html','dist/widget.html')\"",
+    "build": "tsc && node src/build-widget.js",
+    "prepublishOnly": "tsc && node src/build-widget.js",
     "start": "node dist/index.js"
   },
   "keywords": [
