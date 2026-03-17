@@ -66,17 +66,41 @@ function createServer(): McpServer {
       },
     },
     async ({ json_content }) => {
-      const body =
+      let parsedContent =
         typeof json_content === "string"
-          ? { json_content: JSON.parse(json_content) }
-          : { json_content };
+          ? JSON.parse(json_content)
+          : json_content;
+
+      // Auto-justify: normalize the JSON to NavigateChat schema before publishing
+      try {
+        const justifyRes = await fetch(
+          `${API_BASE_URL}/api/chat/justify_content`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_json: JSON.stringify(parsedContent) }),
+          }
+        );
+        if (justifyRes.ok) {
+          const justified = await justifyRes.json();
+          if (justified && justified.content) {
+            parsedContent = typeof justified.content === "string"
+              ? JSON.parse(justified.content)
+              : justified.content;
+          } else if (justified && justified.metadata) {
+            parsedContent = justified;
+          }
+        }
+      } catch {
+        // If justify fails, proceed with original content
+      }
 
       const response = await fetch(
         `${API_BASE_URL}/api/chat/diagram/public`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ json_content: parsedContent }),
         }
       );
 
