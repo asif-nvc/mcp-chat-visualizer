@@ -40,10 +40,19 @@ Key details:
 
 ## Changelog
 
+### 2026-03-17
+- Rebuilt widget as 18KB self-contained HTML with raw postMessage MCP Apps protocol (no SDK bundle)
+- Ported NavigateChat frontend interactivity: click to select, double-click to collapse/expand, hover tooltips, details panel
+- Added pan (drag), zoom (scroll wheel), fit view, and layout switching (linear/radial)
+- SVG renderer with tree layout ported from NavigateChat's layout-utils.ts
+- `create_public_diagram` returns full diagram JSON for direct widget rendering (draw.io pattern)
+- Session-based transport for proper MCP capability negotiation
+- `visualize_chat` provides schema prompt, `create_public_diagram` renders inline + publishes
+
 ### 2026-03-16
 - Added MCP Apps support for inline diagram rendering in Claude
-- Created `src/widget.html` — MCP Apps widget that embeds NavigateChat viewer via iframe
-- Switched `create_public_diagram` and `update_public_diagram` from `server.registerTool` to `registerAppTool` with `_meta.ui.resourceUri`
-- Added `registerAppResource` serving widget HTML with CSP allowing `www.navigatechat.com` iframe embedding
 - Added `@modelcontextprotocol/ext-apps` dependency
-- Updated build script to copy `widget.html` to `dist/`
+- Created `src/build-widget.js` to build widget HTML with inlined dependencies
+- Switched `create_public_diagram` and `update_public_diagram` to `registerAppTool` with `_meta.ui.resourceUri`
+- Added `registerAppResource` serving widget HTML
+- Added session-based HTTP transport for MCP Apps capability negotiation
