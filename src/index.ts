@@ -53,87 +53,48 @@ function createServer(): McpServer {
     {
       title: "Create Public Diagram",
       description:
-        "Create a publicly shareable mind map diagram from a topic. Pass a topic string (e.g. 'Artificial Intelligence', 'History of Rome') and this tool returns instructions for generating the mind map JSON, which you MUST follow to produce the output. After generating the JSON, call create_public_diagram again with the generated JSON as json_content to publish it. Alternatively, pass pre-built diagram JSON directly to publish immediately.",
+        "Create and display an interactive mind map diagram. Pass the diagram JSON content (with metadata, nodes, edges, hierarchy). Each node must have id and data with label, type (root/category/leaf), summary, and hoverSummary. The tool renders the mind map inline and publishes it to a shareable link. IMPORTANT: Use visualize_chat first to get the correct JSON schema, then pass the generated JSON here.",
       inputSchema: {
-        topic: z
-          .string()
-          .optional()
-          .describe(
-            "The topic to visualize as a mind map. When provided, returns prompt instructions for generating the diagram JSON."
-          ),
         json_content: z
           .union([z.string(), z.record(z.string(), z.any())])
-          .optional()
           .describe(
-            "Pre-built diagram JSON to publish directly. Must have metadata, nodes (with label, type, summary, hoverSummary), edges, and hierarchy."
+            "The mind map JSON with metadata, nodes (each with data.label, data.type, data.summary, data.hoverSummary), edges, and hierarchy"
           ),
       },
       _meta: {
         ui: { resourceUri: DIAGRAM_RESOURCE_URI },
       },
     },
-    async ({ topic, json_content }) => {
-      // If topic is provided but no json_content, return the prompt instructions
-      if (topic && !json_content) {
-        const prompt = buildMindMapPrompt(topic);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: prompt + "\n\nIMPORTANT: After generating the JSON above, call create_public_diagram again with the generated JSON as the json_content parameter to publish it.",
-            },
-          ],
-        };
-      }
-
-      // If json_content is provided, publish the diagram
-      if (!json_content) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: "Error: Provide either a 'topic' string to generate a mind map, or 'json_content' with diagram JSON to publish.",
-            },
-          ],
-          isError: true,
-        };
-      }
-
+    async ({ json_content }) => {
       const parsedContent =
         typeof json_content === "string"
           ? JSON.parse(json_content)
           : json_content;
 
-      const response = await fetch(
-        `${API_BASE_URL}/api/chat/diagram/public`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ json_content: parsedContent }),
+      // Publish to NavigateChat API
+      let link = "";
+      let public_id = "";
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/chat/diagram/public`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ json_content: parsedContent }),
+          }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          link = data.link || "";
+          public_id = data.public_id || "";
         }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error creating public diagram (${response.status}): ${errorText}`,
-            },
-          ],
-          isError: true,
-        };
+      } catch {
+        // Publishing failed, still return the JSON for widget rendering
       }
 
-      const data = await response.json();
-      // Return both the diagram JSON (for widget rendering) and the link metadata
-      const result = {
-        ...parsedContent,
-        _link: data.link,
-        _public_id: data.public_id,
-        _diagram_id: data.diagram_id,
-      };
+      // Return the diagram JSON as text — the widget renders it directly
+      // (same pattern as draw.io returning XML)
+      const result = { ...parsedContent, _link: link, _public_id: public_id };
       return {
         content: [
           {
@@ -284,9 +245,6 @@ function createServer(): McpServer {
             text: html,
             _meta: {
               ui: {
-                csp: {
-                  resourceDomains: ["https://d3js.org"],
-                },
                 prefersBorder: true,
               },
             },
