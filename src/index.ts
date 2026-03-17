@@ -53,47 +53,56 @@ function createServer(): McpServer {
     {
       title: "Create Public Diagram",
       description:
-        "Create a publicly shareable diagram link. Takes diagram JSON content and returns a public URL. IMPORTANT: The json_content MUST follow this exact schema: { metadata: { topic, contentType: 'mindmap', nodeCount }, nodes: [{ id, data: { label, type: 'root'|'category'|'leaf', summary, hoverSummary } }], edges: [{ id, source, target, type: 'connects' }], hierarchy: { parentId: [childIds] } }. Every node MUST have label, summary, and hoverSummary in its data field. Use visualize_chat first to get proper schema guidance.",
+        "Create a publicly shareable mind map diagram from a topic. Pass a topic string (e.g. 'Artificial Intelligence', 'History of Rome') and this tool returns instructions for generating the mind map JSON, which you MUST follow to produce the output. After generating the JSON, call create_public_diagram again with the generated JSON as json_content to publish it. Alternatively, pass pre-built diagram JSON directly to publish immediately.",
       inputSchema: {
+        topic: z
+          .string()
+          .optional()
+          .describe(
+            "The topic to visualize as a mind map. When provided, returns prompt instructions for generating the diagram JSON."
+          ),
         json_content: z
           .union([z.string(), z.record(z.string(), z.any())])
+          .optional()
           .describe(
-            "The diagram JSON content with metadata, nodes (each with id, data.label, data.type, data.summary, data.hoverSummary), edges, and hierarchy"
+            "Pre-built diagram JSON to publish directly. Must have metadata, nodes (with label, type, summary, hoverSummary), edges, and hierarchy."
           ),
       },
       _meta: {
         ui: { resourceUri: DIAGRAM_RESOURCE_URI },
       },
     },
-    async ({ json_content }) => {
-      let parsedContent =
+    async ({ topic, json_content }) => {
+      // If topic is provided but no json_content, return the prompt instructions
+      if (topic && !json_content) {
+        const prompt = buildMindMapPrompt(topic);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: prompt + "\n\nIMPORTANT: After generating the JSON above, call create_public_diagram again with the generated JSON as the json_content parameter to publish it.",
+            },
+          ],
+        };
+      }
+
+      // If json_content is provided, publish the diagram
+      if (!json_content) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "Error: Provide either a 'topic' string to generate a mind map, or 'json_content' with diagram JSON to publish.",
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const parsedContent =
         typeof json_content === "string"
           ? JSON.parse(json_content)
           : json_content;
-
-      // Auto-justify: normalize the JSON to NavigateChat schema before publishing
-      try {
-        const justifyRes = await fetch(
-          `${API_BASE_URL}/api/chat/justify_content`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user_json: JSON.stringify(parsedContent) }),
-          }
-        );
-        if (justifyRes.ok) {
-          const justified = await justifyRes.json();
-          if (justified && justified.content) {
-            parsedContent = typeof justified.content === "string"
-              ? JSON.parse(justified.content)
-              : justified.content;
-          } else if (justified && justified.metadata) {
-            parsedContent = justified;
-          }
-        }
-      } catch {
-        // If justify fails, proceed with original content
-      }
 
       const response = await fetch(
         `${API_BASE_URL}/api/chat/diagram/public`,
