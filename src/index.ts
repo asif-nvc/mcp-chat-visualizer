@@ -127,20 +127,18 @@ function createServer(): McpServer {
       }
 
       const data = await response.json();
+      // Return both the diagram JSON (for widget rendering) and the link metadata
+      const result = {
+        ...parsedContent,
+        _link: data.link,
+        _public_id: data.public_id,
+        _diagram_id: data.diagram_id,
+      };
       return {
         content: [
           {
             type: "text" as const,
-            text: JSON.stringify(
-              {
-                link: data.link,
-                public_id: data.public_id,
-                diagram_id: data.diagram_id,
-                created_at: data.created_at,
-              },
-              null,
-              2
-            ),
+            text: JSON.stringify(result),
           },
         ],
       };
@@ -286,6 +284,9 @@ function createServer(): McpServer {
             text: html,
             _meta: {
               ui: {
+                csp: {
+                  resourceDomains: ["https://d3js.org"],
+                },
                 prefersBorder: true,
               },
             },
