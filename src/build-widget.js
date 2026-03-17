@@ -30,10 +30,15 @@ const html = `<!DOCTYPE html>
   <title>NavigateChat Diagram</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
+    html, body { width: 100%; overflow: hidden; background: transparent; }
+    #container {
+      width: 100%;
+      height: 500px;
+      position: relative;
+    }
     #diagram-frame {
       width: 100%;
-      height: 100%;
+      height: 500px;
       border: none;
       border-radius: 8px;
     }
@@ -41,25 +46,26 @@ const html = `<!DOCTYPE html>
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 100%;
+      height: 500px;
       font-family: system-ui, -apple-system, sans-serif;
-      color: #666;
+      color: #999;
       font-size: 14px;
     }
   </style>
 </head>
 <body>
-  <div id="loading">Loading diagram...</div>
-  <iframe id="diagram-frame" style="display:none;" allowfullscreen></iframe>
+  <div id="container">
+    <div id="loading">Loading diagram...</div>
+    <iframe id="diagram-frame" style="display:none;" allowfullscreen></iframe>
+  </div>
 
   <script>
     // Inlined @modelcontextprotocol/ext-apps App SDK
     ${sdkCode}
   </script>
   <script>
-    // Use the App class from the inlined SDK
-    // The bundle defines App in the module scope — we access it via the last defined class
-    const app = new App({ name: "NavigateChat Diagram Viewer", version: "1.0.0" }, {}, { autoResize: true });
+    const loadingEl = document.getElementById("loading");
+    const frameEl = document.getElementById("diagram-frame");
 
     function extractLink(text) {
       try {
@@ -71,27 +77,51 @@ const html = `<!DOCTYPE html>
     }
 
     function showDiagram(url) {
-      document.getElementById("loading").style.display = "none";
-      const frame = document.getElementById("diagram-frame");
-      frame.src = url;
-      frame.style.display = "block";
+      loadingEl.style.display = "none";
+      frameEl.src = url;
+      frameEl.style.display = "block";
     }
 
-    app.ontoolresult = (result) => {
-      const textContent = result?.content?.find(c => c.type === "text")?.text;
-      if (textContent) {
-        const link = extractLink(textContent);
-        if (link) showDiagram(link);
-      }
-    };
+    function showError(msg) {
+      loadingEl.textContent = msg;
+      loadingEl.style.color = "#f66";
+    }
 
-    app.ontoolcancelled = () => {
-      document.getElementById("loading").textContent = "Diagram cancelled.";
-    };
+    try {
+      const app = new App({ name: "NavigateChat Diagram Viewer", version: "1.0.0" }, {}, { autoResize: false });
 
-    app.onhostcontextchanged = (ctx) => {};
+      app.ontoolinput = (params) => {
+        // Try to extract link from input args early
+        loadingEl.textContent = "Generating diagram...";
+      };
 
-    app.connect();
+      app.ontoolresult = (result) => {
+        const textContent = result?.content?.find(c => c.type === "text")?.text;
+        if (textContent) {
+          const link = extractLink(textContent);
+          if (link) {
+            showDiagram(link);
+          } else if (result?.isError) {
+            showError("Error: " + textContent);
+          } else {
+            showError("No diagram link found");
+          }
+        }
+      };
+
+      app.ontoolcancelled = () => {
+        showError("Diagram generation cancelled");
+      };
+
+      app.onhostcontextchanged = (ctx) => {};
+
+      app.connect().catch((err) => {
+        showError("Connection failed: " + err.message);
+      });
+    } catch (err) {
+      loadingEl.textContent = "Error: " + err.message;
+      loadingEl.style.color = "#f66";
+    }
   </script>
 </body>
 </html>`;
