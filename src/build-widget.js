@@ -26,7 +26,8 @@ html,body{width:100%;background:transparent;font-family:system-ui,-apple-system,
 </style>
 </head>
 <body>
-<div id="status">Loading diagram...</div>
+<div id="status">Widget HTML loaded</div>
+<noscript><div style="color:red;padding:12px">JavaScript is disabled in this sandbox</div></noscript>
 <div id="error"></div>
 <div id="mindmap"></div>
 <div id="toolbar">
@@ -34,6 +35,7 @@ html,body{width:100%;background:transparent;font-family:system-ui,-apple-system,
   <button id="btn-fs">Fullscreen</button>
 </div>
 <div class="tt" id="tt"></div>
+<script>document.getElementById("status").textContent="JS running";</script>
 <script>
 // ---- Minimal MCP Apps postMessage protocol ----
 var reqId = 0;
