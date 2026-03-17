@@ -286,9 +286,7 @@ function createServer(): McpServer {
             text: html,
             _meta: {
               ui: {
-                csp: {
-                  frameDomains: ["https://www.navigatechat.com"],
-                },
+                prefersBorder: true,
               },
             },
           },
