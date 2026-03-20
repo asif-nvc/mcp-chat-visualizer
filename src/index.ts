@@ -53,7 +53,7 @@ function createServer(): McpServer {
     {
       title: "Create Public Diagram",
       description:
-        "Create and display an interactive mind map diagram. Pass the diagram JSON content (with metadata, nodes, edges, hierarchy). Each node must have id and data with label, type (root/category/leaf), summary, and hoverSummary. The tool renders the mind map inline and publishes it to a shareable link. IMPORTANT: Use visualize_chat first to get the correct JSON schema, then pass the generated JSON here.",
+        "Create and display an interactive mind map diagram. Pass the diagram JSON content (with metadata, nodes, edges, hierarchy). Each node must have id and data with label, type (root/category/leaf), summary, and hoverSummary. The tool renders the mind map inline and publishes it to a shareable link. IMPORTANT: Use visualize_chat first to get the correct JSON schema, then pass the generated JSON here. CRITICAL: The response includes a public_id — if the user asks to modify the diagram, you MUST use update_public_diagram with that public_id instead of creating a new one.",
       inputSchema: {
         json_content: z
           .union([z.string(), z.record(z.string(), z.any())])
@@ -112,17 +112,17 @@ function createServer(): McpServer {
     {
       title: "Update Public Diagram",
       description:
-        "Update an existing public diagram's content at the same shareable link. Use this when a user wants to modify a previously created diagram — the URL stays the same and the TTL is extended.",
+        "Update an existing public diagram at the SAME shareable link. ALWAYS use this instead of create_public_diagram when the user wants to modify, add to, remove from, or change an existing diagram. Requires the public_id from the original create_public_diagram response. The URL stays the same and the TTL is extended. Use visualize_chat with the modification request to regenerate the full JSON, then pass it here with the original public_id.",
       inputSchema: {
         public_id: z
           .string()
           .describe(
-            "The public_id returned from a previous create_public_diagram call"
+            "The public_id from the original create_public_diagram response. This MUST be the same public_id to update the existing diagram."
           ),
         json_content: z
           .union([z.string(), z.record(z.string(), z.any())])
           .describe(
-            "The updated diagram JSON content — either a JSON string or an object with metadata, nodes, and edges"
+            "The complete updated diagram JSON with metadata, nodes (each with data.label, data.type, data.summary, data.hoverSummary), edges, and hierarchy"
           ),
       },
       _meta: {
@@ -130,17 +130,17 @@ function createServer(): McpServer {
       },
     },
     async ({ public_id, json_content }) => {
-      const body =
+      const parsedContent =
         typeof json_content === "string"
-          ? { json_content: JSON.parse(json_content) }
-          : { json_content };
+          ? JSON.parse(json_content)
+          : json_content;
 
       const response = await fetch(
         `${API_BASE_URL}/api/diagram/${public_id}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ json_content: parsedContent }),
         }
       );
 
@@ -158,20 +158,17 @@ function createServer(): McpServer {
       }
 
       const data = await response.json();
+      // Return full JSON for widget rendering (same as create)
+      const result = {
+        ...parsedContent,
+        _link: data.link || "",
+        _public_id: data.public_id || public_id,
+      };
       return {
         content: [
           {
             type: "text" as const,
-            text: JSON.stringify(
-              {
-                link: data.link,
-                public_id: data.public_id,
-                diagram_id: data.diagram_id,
-                created_at: data.created_at,
-              },
-              null,
-              2
-            ),
+            text: JSON.stringify(result),
           },
         ],
       };

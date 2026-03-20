@@ -592,7 +592,18 @@ document.getElementById("btn-theme").onclick=function(){
   redraw();
 };
 document.getElementById("btn-open").onclick=function(){if(diagramLink)sendReq("ui/open-link",{url:diagramLink});};
-document.getElementById("btn-fs").onclick=function(){sendReq("ui/request-display-mode",{mode:"fullscreen"});};
+var isFullscreen=false;
+document.getElementById("btn-fs").onclick=function(){
+  isFullscreen=!isFullscreen;
+  sendReq("ui/request-display-mode",{mode:isFullscreen?"fullscreen":"inline"});
+  document.getElementById("btn-fs").textContent=isFullscreen?"⊡":"⛶";
+  // Also try resizing to fill
+  if(isFullscreen){
+    document.getElementById("wrap").style.height="100vh";
+    document.getElementById("canvas").style.height="calc(100vh - 36px)";
+  }
+  setTimeout(function(){fitView();reportSize();},100);
+};
 document.getElementById("det-close").onclick=hideDetails;
 
 // ========== MCP PROTOCOL ==========
@@ -625,6 +636,20 @@ window.addEventListener("message",function(ev){
   if(msg.method==="ui/notifications/host-context-changed"){
     var ctx=msg.params||{};
     if(ctx.theme)document.documentElement.setAttribute("data-theme",ctx.theme);
+    if(ctx.displayMode){
+      isFullscreen=ctx.displayMode==="fullscreen";
+      document.getElementById("btn-fs").textContent=isFullscreen?"⊡":"⛶";
+      if(isFullscreen){
+        document.getElementById("wrap").style.height="100vh";
+        document.getElementById("canvas").style.height="calc(100vh - 36px)";
+      }else{
+        reportSize();
+      }
+      setTimeout(function(){fitView();},100);
+    }
+    if(ctx.containerDimensions){
+      setTimeout(function(){fitView();},100);
+    }
     return;
   }
 });
