@@ -77,17 +77,14 @@ html[data-theme="light"] .spin{border-color:#e5e5e5;border-top-color:#10a37f}
   <div id="canvas"></div>
   <div id="tb">
     <div class="g">
-      <button id="z-in" title="Zoom in">+</button>
-      <button id="z-out" title="Zoom out">−</button>
       <button id="z-fit" title="Fit view">⊡ Fit</button>
       <div class="sep"></div>
-      <button id="z-linear" title="Linear layout">☰ Linear</button>
-      <button id="z-radial" title="Radial layout">◎ Radial</button>
+      <button id="z-layout" title="Toggle layout">☰ Linear</button>
       <div class="sep"></div>
       <button id="z-cup" title="Collapse one level">▲ Collapse</button>
       <button id="z-cdn" title="Expand one level">▼ Expand</button>
       <div class="sep"></div>
-      <button id="z-lock" title="Lock/unlock node dragging">🔓 Unlocked</button>
+      <button id="z-lock" title="Lock/unlock interaction">🔓 Unlocked</button>
       <button id="z-reset" title="Reset node positions">↺ Reset</button>
     </div>
     <div class="g">
@@ -428,12 +425,13 @@ function bindNodeEvents(){
 
     el.addEventListener("click",function(ev){
       ev.stopPropagation();
-      if(nodeWasDragged)return; // ignore click after drag
+      if(locked||nodeWasDragged)return;
       showDetails(id);
     });
 
     el.addEventListener("dblclick",function(ev){
       ev.stopPropagation();
+      if(locked)return;
       if((adjList[id]||[]).length>0){
         collapsed[id]=!collapsed[id];
         customPos={}; // reset custom positions on collapse
@@ -441,8 +439,8 @@ function bindNodeEvents(){
       }
     });
 
-    el.addEventListener("mouseenter",function(ev){if(!nodeDragId)showTT(ev,id);});
-    el.addEventListener("mousemove",function(ev){if(!nodeDragId){ttEl.style.left=Math.min(ev.clientX+12,window.innerWidth-260)+"px";ttEl.style.top=(ev.clientY-10)+"px";}});
+    el.addEventListener("mouseenter",function(ev){if(!locked&&!nodeDragId)showTT(ev,id);});
+    el.addEventListener("mousemove",function(ev){if(!locked&&!nodeDragId){ttEl.style.left=Math.min(ev.clientX+12,window.innerWidth-260)+"px";ttEl.style.top=(ev.clientY-10)+"px";}});
     el.addEventListener("mouseleave",hideTT);
   });
 }
@@ -572,11 +570,14 @@ window.addEventListener("mouseup",function(){isDragging=false;});
 canvasEl.addEventListener("wheel",function(ev){ev.preventDefault();var r=canvasEl.getBoundingClientRect();zoomBy(ev.deltaY>0?-0.1:0.1,ev.clientX-r.left,ev.clientY-r.top);},{passive:false});
 canvasEl.addEventListener("click",function(ev){if(ev.target===canvasEl||ev.target.tagName==="svg"){hideDetails();}});
 
-document.getElementById("z-in").onclick=function(){var r=canvasEl.getBoundingClientRect();zoomBy(0.2,r.width/2,r.height/2);};
-document.getElementById("z-out").onclick=function(){var r=canvasEl.getBoundingClientRect();zoomBy(-0.2,r.width/2,r.height/2);};
 document.getElementById("z-fit").onclick=function(){fitView();setTimeout(reportSize,100);};
-document.getElementById("z-linear").onclick=function(){currentLayout="linear";redraw();setTimeout(function(){fitView();reportSize();},50);};
-document.getElementById("z-radial").onclick=function(){currentLayout="radial";redraw();setTimeout(function(){fitView();reportSize();},50);};
+document.getElementById("z-layout").onclick=function(){
+  currentLayout=currentLayout==="linear"?"radial":"linear";
+  customPos={};
+  var btn=document.getElementById("z-layout");
+  btn.textContent=currentLayout==="linear"?"☰ Linear":"◎ Radial";
+  redraw();setTimeout(function(){fitView();reportSize();},50);
+};
 document.getElementById("z-cup").onclick=drillUp;
 document.getElementById("z-cdn").onclick=drillDown;
 document.getElementById("z-lock").onclick=function(){
