@@ -304,22 +304,34 @@ const httpServer = http.createServer(async (req, res) => {
     try {
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
-      // Existing session — route to its transport
+      // Existing session — route to its transport (GET for SSE, POST for requests)
       if (sessionId && sessions.has(sessionId)) {
         const session = sessions.get(sessionId)!;
         await session.transport.handleRequest(req, res);
         return;
       }
 
-      // Unknown session ID — the client thinks it has a session but we don't
-      // (e.g. after a redeploy). Return 404 so the client re-initializes.
+      // Unknown session ID — return 404 so client re-initializes
       if (sessionId && !sessions.has(sessionId)) {
         res.writeHead(404, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Session not found. Please reinitialize." }));
         return;
       }
 
-      // No session ID — new connection, create session
+      // No session ID
+      if (req.method === "GET") {
+        // GET without session ID — return server info (for discovery/health)
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          name: "mcp-chat-visualizer",
+          version: "1.0.0",
+          protocol: "mcp",
+          description: "MCP server that visualizes conversations as hierarchical mind maps",
+        }));
+        return;
+      }
+
+      // POST without session ID — new connection, create session
       const transport = createSession();
       await transport.handleRequest(req, res);
 
