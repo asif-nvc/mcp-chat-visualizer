@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Whiteboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+    #container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    #canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+    #canvas.dragging { cursor: grabbing; }
+    #canvas.grabbing { cursor: grabbing; }
+    
+    /* SVG container for infinite canvas */
+    #svg-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      transform-origin: 0 0;
+      pointer-events: none;
+    }
+    #svg-container > * { pointer-events: auto; }
+
+    /* Toolbar */
+    #toolbar {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #2a2a2a;
+      border: 1px solid #404040;
+      border-radius: 8px;
+      padding: 8px 16px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    #toolbar button {
+      background: #3a3a3a;
+      border: 1px solid #505050;
+      color: #e0e0e0;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    #toolbar button:hover { background: #4a4a4a; }
+    #toolbar button:active { background: #2a2a2a; }
+    #toolbar .separator { width: 1px; height: 24px; background: #404040; }
+    #toolbar .zoom-display { font-size: 12px; color: #888; min-width: 50px; text-align: center; }
+
+    /* Diagram containers */
+    .diagram {
+      position: absolute;
+      background: #2f2f2f;
+      border: 2px solid #404040;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+      transition: box-shadow 0.2s, border-color 0.2s;
+    }
+    .diagram:hover {
+      border-color: #10a37f;
+    }
+    .diagram.selected {
+      border-color: #10a37f;
+      box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.3), 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .diagram-header {
+      background: #252525;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: #888;
+      border-bottom: 1px solid #404040;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .diagram-content {
+      width: 100%;
+      height: calc(100% - 32px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #1a1a1a;
+    }
+    .diagram-content img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    .diagram-content svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Resize handles */
+    .resize-handle {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      background: #10a37f;
+      border-radius: 2px;
+      display: none;
+    }
+    .diagram.selected .resize-handle { display: block; }
+    .resize-handle.se { bottom: -6px; right: -6px; cursor: se-resize; }
+    .resize-handle.e { top: 50%; right: -6px; transform: translateY(-50%); cursor: e-resize; }
+    .resize-handle.s { bottom: -6px; left: 50%; transform: translateX(-50%); cursor: s-resize; }
+
+    /* Mini map */
+    #minimap {
+      position: fixed;
+      bottom: 12px;
+      right: 12px;
+      width: 180px;
+      height: 120px;
+      background: #252525;
+      border: 1px solid #404040;
+      border-radius: 8px;
+      overflow: hidden;
+      z-index: 100;
+    }
+    #minimap-viewport {
+      position: absolute;
+      border: 2px solid #10a37f;
+      background: rgba(16, 163, 127, 0.1);
+      pointer-events: none;
+    }
+    #minimap-content {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    .minimap-diagram {
+      position: absolute;
+      background: #3a3a3a;
+      border: 1px solid #505050;
+      border-radius: 2px;
+    }
+
+    /* Empty state */
+    #empty-state {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: #666;
+    }
+    #empty-state h3 { font-size: 18px; margin-bottom: 8px; color: #888; }
+    #empty-state p { font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="canvas">
+      <div id="svg-container"></div>
+    </div>
+    
+    <div id="toolbar">
+      <button id="btn-zoom-in">Zoom In</button>
+      <span class="zoom-display" id="zoom-level">100%</span>
+      <button id="btn-zoom-out">Zoom Out</button>
+      <button id="btn-fit">Fit View</button>
+      <div class="separator"></div>
+      <button id="btn-reset">Reset</button>
+    </div>
+
+    <div id="minimap">
+      <div id="minimap-content"></div>
+      <div id="minimap-viewport"></div>
+    </div>
+
+    <div id="empty-state">
+      <h3>No diagrams yet</h3>
+      <p>Add diagrams using the MCP tools</p>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let whiteboardData = null;
+    let scale = 1;
+    let panX = 0;
+    let panY = 0;
+    let isPanning = false;
+    let panStartX = 0;
+    let panStartY = 0;
+    let selectedDiagram = null;
+    let isDraggingDiagram = false;
+    let dragDiagramId = null;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+    let isResizing = false;
+    let resizeDiagramId = null;
+    let resizeHandle = null;
+
+    // DOM elements
+    const container = document.getElementById('container');
+    const canvas = document.getElementById('canvas');
+    const svgContainer = document.getElementById('svg-container');
+    const zoomLevel = document.getElementById('zoom-level');
+    const minimap = document.getElementById('minimap');
+    const minimapContent = document.getElementById('minimap-content');
+    const minimapViewport = document.getElementById('minimap-viewport');
+    const emptyState = document.getElementById('empty-state');
+
+    // Update transform
+    function updateTransform() {
+      svgContainer.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+      zoomLevel.textContent = `${Math.round(scale * 100)}%`;
+      updateMinimap();
+    }
+
+    // Update minimap
+    function updateMinimap() {
+      minimapContent.innerHTML = '';
+      if (!whiteboardData || !whiteboardData.diagrams) return;
+
+      const bounds = getContentBounds();
+      if (!bounds) return;
+
+      const scaleX = 180 / Math.max(bounds.width, 1);
+      const scaleY = 120 / Math.max(bounds.height, 1);
+      const minimapScale = Math.min(scaleX, scaleY, 0.5);
+
+      whiteboardData.diagrams.forEach(d => {
+        const div = document.createElement('div');
+        div.className = 'minimap-diagram';
+        div.style.left = `${d.x * minimapScale}px`;
+        div.style.top = `${d.y * minimapScale}px`;
+        div.style.width = `${d.width * minimapScale}px`;
+        div.style.height = `${d.height * minimapScale}px`;
+        minimapContent.appendChild(div);
+      });
+
+      // Update viewport indicator
+      const viewportWidth = container.clientWidth / scale;
+      const viewportHeight = container.clientHeight / scale;
+      const viewportX = -panX / scale;
+      const viewportY = -panY / scale;
+      minimapViewport.style.left = `${viewportX * minimapScale}px`;
+      minimapViewport.style.top = `${viewportY * minimapScale}px`;
+      minimapViewport.style.width = `${viewportWidth * minimapScale}px`;
+      minimapViewport.style.height = `${viewportHeight * minimapScale}px`;
+    }
+
+    // Get content bounds
+    function getContentBounds() {
+      if (!whiteboardData || !whiteboardData.diagrams || whiteboardData.diagrams.length === 0) {
+        return null;
+      }
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      whiteboardData.diagrams.forEach(d => {
+        minX = Math.min(minX, d.x);
+        minY = Math.min(minY, d.y);
+        maxX = Math.max(maxX, d.x + d.width);
+        maxY = Math.max(maxY, d.y + d.height);
+      });
+      return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+    }
+
+    // Fit view
+    function fitView() {
+      const bounds = getContentBounds();
+      if (!bounds) {
+        panX = 0;
+        panY = 0;
+        scale = 1;
+        updateTransform();
+        return;
+      }
+
+      const padding = 50;
+      const containerWidth = container.clientWidth - padding * 2;
+      const containerHeight = container.clientHeight - padding * 2;
+
+      const scaleX = containerWidth / bounds.width;
+      const scaleY = containerHeight / bounds.height;
+      scale = Math.min(scaleX, scaleY, 1);
+
+      const centerX = bounds.x + bounds.width / 2;
+      const centerY = bounds.y + bounds.height / 2;
+      panX = containerWidth / 2 - centerX * scale;
+      panY = containerHeight / 2 - centerY * scale;
+
+      updateTransform();
+    }
+
+    // Render diagrams
+    function renderDiagrams() {
+      svgContainer.innerHTML = '';
+      
+      if (!whiteboardData || !whiteboardData.diagrams || whiteboardData.diagrams.length === 0) {
+        emptyState.style.display = 'block';
+        minimap.style.display = 'none';
+        return;
+      }
+
+      emptyState.style.display = 'none';
+      minimap.style.display = 'block';
+
+      whiteboardData.diagrams.forEach(diagram => {
+        const div = document.createElement('div');
+        div.className = 'diagram';
+        div.dataset.id = diagram.id;
+        div.style.left = `${diagram.x}px`;
+        div.style.top = `${diagram.y}px`;
+        div.style.width = `${diagram.width}px`;
+        div.style.height = `${diagram.height}px`;
+
+        if (diagram.label) {
+          const header = document.createElement('div');
+          header.className = 'diagram-header';
+          header.textContent = diagram.label;
+          div.appendChild(header);
+        }
+
+        const content = document.createElement('div');
+        content.className = 'diagram-content';
+
+        if (diagram.type === 'image') {
+          const img = document.createElement('img');
+          img.src = diagram.content;
+          img.onerror = () => { img.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"><text x="50%" y="50%" text-anchor="middle" fill="%23888">Image load error</text></svg>'; };
+          content.appendChild(img);
+        } else if (diagram.type === 'mindmap') {
+          try {
+            const mindmapData = JSON.parse(diagram.content);
+            content.innerHTML = renderMindMap(mindmapData);
+          } catch {
+            content.innerHTML = '<div style="color:#888">Invalid mind map data</div>';
+          }
+        } else if (diagram.type === 'drawio') {
+          content.innerHTML = diagram.content;
+        }
+
+        div.appendChild(content);
+
+        // Resize handles
+        const handles = ['se', 'e', 's'];
+        handles.forEach(pos => {
+          const handle = document.createElement('div');
+          handle.className = `resize-handle ${pos}`;
+          handle.dataset.position = pos;
+          div.appendChild(handle);
+        });
+
+        svgContainer.appendChild(div);
+      });
+
+      updateMinimap();
+    }
+
+    // Render mini mind map (simplified for preview)
+    function renderMindMap(data) {
+      if (!data.nodes || !data.edges) return '<div style="color:#888">No mind map data</div>';
+      
+      const nodeMap = {};
+      data.nodes.forEach(n => nodeMap[n.id] = n);
+      
+      const svgNS = "http://www.w3.org/2000/svg";
+      const svg = document.createElementNS(svgNS, "svg");
+      svg.setAttribute("viewBox", `0 0 ${data.metadata?.nodeCount * 80 || 400} ${data.metadata?.nodeCount * 40 || 200}`);
+      
+      // Simple tree layout
+      const root = data.nodes.find(n => n.data?.type === 'root');
+      if (!root) return '<div style="color:#888">No root node</div>';
+
+      const levelColors = {
+        root: '#10a37f',
+        category: '#f97316',
+        leaf: '#22c55e'
+      };
+
+      // Draw edges first
+      data.edges.forEach(edge => {
+        const source = nodeMap[edge.source];
+        const target = nodeMap[edge.target];
+        if (!source || !target) return;
+        
+        const line = document.createElementNS(svgNS, "line");
+        line.setAttribute("x1", 50);
+        line.setAttribute("y1", 50);
+        line.setAttribute("x2", 150);
+        line.setAttribute("y2", 100);
+        line.setAttribute("stroke", "#555");
+        line.setAttribute("stroke-width", "2");
+        svg.appendChild(line);
+      });
+
+      // Draw nodes
+      data.nodes.forEach((node, i) => {
+        const g = document.createElementNS(svgNS, "g");
+        const rect = document.createElementNS(svgNS, "rect");
+        const x = 20 + (i % 4) * 100;
+        const y = 30 + Math.floor(i / 4) * 60;
+        rect.setAttribute("x", x);
+        rect.setAttribute("y", y);
+        rect.setAttribute("width", 80);
+        rect.setAttribute("height", 30);
+        rect.setAttribute("rx", 4);
+        rect.setAttribute("fill", "#2f2f2f");
+        rect.setAttribute("stroke", levelColors[node.data?.type] || '#555');
+        rect.setAttribute("stroke-width", "2");
+        
+        const text = document.createElementNS(svgNS, "text");
+        text.setAttribute("x", x + 40);
+        text.setAttribute("y", y + 20);
+        text.setAttribute("text-anchor", "middle");
+        text.setAttribute("fill", "#e0e0e0");
+        text.setAttribute("font-size", "11");
+        text.textContent = node.data?.label?.substring(0, 10) || 'Node';
+        
+        g.appendChild(rect);
+        g.appendChild(text);
+        svg.appendChild(g);
+      });
+
+      return svg.outerHTML;
+    }
+
+    // Event handlers
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      const newScale = Math.min(Math.max(scale * delta, 0.1), 3);
+      
+      // Zoom towards cursor
+      const rect = container.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      
+      panX = mouseX - (mouseX - panX) * (newScale / scale);
+      panY = mouseY - (mouseY - panY) * (newScale / scale);
+      scale = newScale;
+      
+      updateTransform();
+    });
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (e.target === canvas || e.target === svgContainer) {
+        isPanning = true;
+        panStartX = e.clientX - panX;
+        panStartY = e.clientY - panY;
+        canvas.classList.add('dragging');
+      }
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (isPanning) {
+        panX = e.clientX - panStartX;
+        panY = e.clientY - panStartY;
+        updateTransform();
+      } else if (isDraggingDiagram && dragDiagramId) {
+        const diagram = svgContainer.querySelector(`[data-id="${dragDiagramId}"]`);
+        if (diagram) {
+          const newX = (e.clientX - dragOffsetX - panX) / scale;
+          const newY = (e.clientY - dragOffsetY - panY) / scale;
+          diagram.style.left = `${newX}px`;
+          diagram.style.top = `${newY}px`;
+          
+          // Update data
+          const diag = whiteboardData.diagrams.find(d => d.id === dragDiagramId);
+          if (diag) {
+            diag.x = newX;
+            diag.y = newY;
+          }
+          updateMinimap();
+        }
+      } else if (isResizing && resizeDiagramId) {
+        const diagram = svgContainer.querySelector(`[data-id="${resizeDiagramId}"]`);
+        if (diagram) {
+          const newWidth = Math.max(100, (e.clientX - diagram.getBoundingClientRect().left - panX) / scale);
+          const newHeight = Math.max(80, (e.clientY - diagram.getBoundingClientRect().top - panY) / scale);
+          diagram.style.width = `${newWidth}px`;
+          diagram.style.height = `${newHeight}px`;
+          
+          const diag = whiteboardData.diagrams.find(d => d.id === resizeDiagramId);
+          if (diag) {
+            diag.width = newWidth;
+            diag.height = newHeight;
+          }
+          updateMinimap();
+        }
+      }
+    });
+
+    document.addEventListener('mouseup', () => {
+      isPanning = false;
+      canvas.classList.remove('dragging');
+      
+      if (isDraggingDiagram) {
+        isDraggingDiagram = false;
+        // Could trigger save here
+      }
+      if (isResizing) {
+        isResizing = false;
+      }
+    });
+
+    // Diagram click handling
+    svgContainer.addEventListener('mousedown', (e) => {
+      const diagram = e.target.closest('.diagram');
+      if (diagram) {
+        const diagramId = diagram.dataset.id;
+        
+        // Check for resize handle
+        if (e.target.classList.contains('resize-handle')) {
+          isResizing = true;
+          resizeDiagramId = diagramId;
+          resizeHandle = e.target.dataset.position;
+          return;
+        }
+
+        // Select diagram
+        document.querySelectorAll('.diagram').forEach(d => d.classList.remove('selected'));
+        diagram.classList.add('selected');
+        selectedDiagram = diagramId;
+
+        // Start drag
+        isDraggingDiagram = true;
+        dragDiagramId = diagramId;
+        const rect = diagram.getBoundingClientRect();
+        dragOffsetX = e.clientX - rect.left;
+        dragOffsetY = e.clientY - rect.top;
+        
+        e.stopPropagation();
+      }
+    });
+
+    // Click on canvas to deselect
+    canvas.addEventListener('click', (e) => {
+      if (e.target === canvas || e.target === svgContainer) {
+        document.querySelectorAll('.diagram').forEach(d => d.classList.remove('selected'));
+        selectedDiagram = null;
+      }
+    });
+
+    // Toolbar buttons
+    document.getElementById('btn-zoom-in').addEventListener('click', () => {
+      scale = Math.min(scale * 1.2, 3);
+      updateTransform();
+    });
+
+    document.getElementById('btn-zoom-out').addEventListener('click', () => {
+      scale = Math.max(scale * 0.8, 0.1);
+      updateTransform();
+    });
+
+    document.getElementById('btn-fit').addEventListener('click', fitView);
+
+    document.getElementById('btn-reset').addEventListener('click', () => {
+      panX = 0;
+      panY = 0;
+      scale = 1;
+      updateTransform();
+    });
+
+    // Handle messages from host
+    window.addEventListener('message', (event) => {
+      const message = event.data;
+      if (message.method === 'tools/call' && message.result) {
+        // Extract whiteboard data from tool result
+        try {
+          // The tool returns the full whiteboard JSON
+          const content = message.result.content;
+          if (content && content[0] && content[0].text) {
+            whiteboardData = JSON.parse(content[0].text);
+            renderDiagrams();
+            
+            // Report size
+            setTimeout(() => {
+              const bounds = getContentBounds();
+              if (bounds) {
+                window.parent.postMessage({
+                  jsonrpc: '2.0',
+                  method: 'ui/report-size',
+                  params: { width: Math.min(bounds.width + 100, 1200), height: Math.min(bounds.height + 100, 800) }
+                }, '*');
+              }
+            }, 100);
+          }
+        } catch (err) {
+          console.error('Error parsing whiteboard data:', err);
+        }
+      }
+    });
+
+    // Initial setup
+    renderDiagrams();
+    fitView();
+  </script>
+</body>
+</html>
