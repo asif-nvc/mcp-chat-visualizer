@@ -1,8 +1,5 @@
 {
   "buildCommand": "npm run build",
   "installCommand": "npm install",
-  "outputDirectory": "public",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/api/index.js" }
-  ]
+  "outputDirectory": "public"
 }
