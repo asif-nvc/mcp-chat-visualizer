@@ -250,7 +250,7 @@ function createServer(): McpServer {
           },
           {
             type: "text" as const,
-            text: `Whiteboard created: "${whiteboard.name}" (id: ${whiteboard.id}). Use this id to add diagrams and manage the whiteboard.`,
+            text: `Whiteboard created: "${whiteboard.name}" (id: ${whiteboard.id}). Access at: ${shareableLink}`,
           },
         ],
       };
@@ -270,7 +270,10 @@ function createServer(): McpServer {
         content: [
           {
             type: "text" as const,
-            text: JSON.stringify(whiteboards, null, 2),
+            text: JSON.stringify(whiteboards.map(wb => ({
+              ...wb,
+              whiteboardUrl: `/whiteboard/${wb.id}`,
+            })), null, 2),
           },
         ],
       };
@@ -303,7 +306,10 @@ function createServer(): McpServer {
         content: [
           {
             type: "text" as const,
-            text: JSON.stringify(whiteboard),
+            text: JSON.stringify({
+              ...whiteboard,
+              whiteboardUrl: `/whiteboard/${whiteboardId}`,
+            }),
           },
         ],
       };
@@ -357,11 +363,16 @@ function createServer(): McpServer {
       }
       
       const whiteboard = await storage.getWhiteboard(whiteboardId);
+      const whiteboardUrl = `/whiteboard/${whiteboardId}`;
       return {
         content: [
           {
             type: "text" as const,
-            text: JSON.stringify(whiteboard),
+            text: JSON.stringify({
+              diagramId: diagram.id,
+              whiteboardId: whiteboardId,
+              whiteboardUrl: whiteboardUrl,
+            }),
           },
         ],
       };
